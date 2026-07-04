@@ -1,3 +1,4 @@
 config.yaml
 *.json
 !package.json
+__pycache__/
