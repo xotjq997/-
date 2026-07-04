@@ -1,39 +1,111 @@
 # local-agent 설정 예시. 복사해서 config.yaml로 저장한 뒤 실제 환경값으로 채우세요.
 # config.yaml은 .gitignore에 등록해 실제 경로/자격증명이 저장소에 올라가지 않게 하세요.
 
-# Google Drive for Desktop으로 동기화된, GAS의 EXPORT_FOLDER_ID와 동일한 폴더의 "로컬 경로".
-# 예: C:\Users\<user>\Google Drive\세무사랑_연동
-watch_folder: "C:/Users/CHANGE_ME/Google Drive/세무사랑_연동"
-
-# 처리 완료 후 파일을 옮겨둘 로컬 폴더 (감사/재처리 대비)
-processed_folder: "C:/Users/CHANGE_ME/Google Drive/세무사랑_연동/processed"
-failed_folder: "C:/Users/CHANGE_ME/Google Drive/세무사랑_연동/failed"
-
-# 새 파일이 Drive 동기화로 완전히 다 내려올 때까지 대기하는 시간(초)
-settle_seconds: 5
-
 google_sheets:
   # Google Cloud 서비스 계정 키 파일 경로. 이 서비스 계정 이메일을
-  # 급여 스프레드시트에 "편집자"로 공유해야 함.
+  # "RPA_원천세" 스프레드시트에 "편집자"로 공유해야 함 (처리로그 시트를 만들고 써야 하므로).
   service_account_json: "C:/secure/service-account.json"
+  # "RPA_원천세" 스프레드시트 ID (URL의 /d/ 뒤 문자열).
   spreadsheet_id: "CHANGE_ME"
-  sync_log_sheet_name: "연동로그"
+  # 급여자료가 있는 워크시트(탭) 이름. 열 구성: 회사명/사업자등록번호/이름/급여구분/금액
+  # (필요하면 주민등록번호, 입사일 등 임의 컬럼을 추가하고 아래 field_control_ids에서 참조 가능)
+  data_sheet_name: "시트1"
+  # 처리 결과(완료/오류)를 기록할 시트 이름. 없으면 자동으로 생성함.
+  log_sheet_name: "처리로그"
 
 setax_pro:
   # 세무사랑 Pro 실행 파일 경로 (프로그램이 이미 켜져 있으면 attach만 시도)
   exe_path: "C:/Program Files (x86)/한국세무사회/세무사랑Pro/SetaxPro.exe"
   # pywinauto가 창을 찾을 때 쓰는 제목 정규식.
-  # 정확한 값은 inspect_controls.py로 실제 창을 열어 확인해서 채워야 한다.
   window_title_regex: ".*세무사랑.*"
   backend: "uia"  # 대부분의 최신 Windows 프로그램은 uia, 구형 win32 프로그램이면 "win32"로 변경
 
-  # 아래 control 식별자들은 전부 placeholder다.
-  # inspect_controls.py 실행 결과를 보고 실제 자동화ID/이름으로 바꿔야 동작한다.
-  menu_path: "원천징수|원천세 신고서 작성"
-  import_button_control_id: "CHANGE_ME_IMPORT_BUTTON"
-  file_path_input_control_id: "CHANGE_ME_FILE_PATH_INPUT"
-  confirm_button_control_id: "CHANGE_ME_CONFIRM_BUTTON"
+  # 안전장치: true면 실제 화면 입력 없이 어떤 동작을 할지 로그만 남긴다.
+  # 처음 세팅할 때는 반드시 true로 먼저 검증할 것.
+  dry_run: true
 
-# 안전장치: true면 실제 화면 입력 없이 어떤 동작을 할지 로그만 남긴다.
-# 처음 세팅할 때는 반드시 true로 먼저 검증할 것.
-dry_run: true
+  # 아래 메뉴 경로/컨트롤ID는 전부 placeholder다.
+  # inspect_controls.py로 세무사랑 Pro 실제 화면을 열어 확인한 뒤 CHANGE_ME를 실제 값으로 바꿔야 동작한다.
+
+  # 회사 변경 (자료에 등장하는 회사를 순서대로 처리하기 위해 매 회사 시작 시 호출)
+  company_switch:
+    menu_path: "회사등록|회사변경"
+    search_input_control_id: "CHANGE_ME"   # 사업자등록번호 검색창
+    confirm_button_control_id: "CHANGE_ME"
+
+  # 급여구분(구글시트 "급여구분" 컬럼 값)별 화면 설정.
+  # field_control_ids의 key는 구글시트 컬럼명이어야 하며, 필수 컬럼 외에 시트에
+  # 추가한 임의 컬럼(주민등록번호, 입사일, 계좌번호 등)도 그대로 key로 쓸 수 있다.
+  income_types:
+    1_정규직근로자:
+      tab_menu_path: "인사급여|근로소득관리"
+      register:
+        menu_path: "사원등록"
+        field_control_ids:
+          이름: "CHANGE_ME"
+        save_button_control_id: "CHANGE_ME"
+      payroll:
+        menu_path: "급여자료입력"
+        field_control_ids:
+          이름: "CHANGE_ME"
+          금액: "CHANGE_ME"
+        save_button_control_id: "CHANGE_ME"
+        close_button_control_id: "CHANGE_ME"   # 마감
+
+    2_일용직근로자:
+      tab_menu_path: "인사급여|일용직근로소득관리"
+      register:
+        menu_path: "일용직사원등록"
+        field_control_ids:
+          이름: "CHANGE_ME"
+        save_button_control_id: "CHANGE_ME"
+      payroll:
+        menu_path: "일용직급여자료일괄입력"
+        field_control_ids:
+          이름: "CHANGE_ME"
+          금액: "CHANGE_ME"
+        save_button_control_id: "CHANGE_ME"
+        close_button_control_id: "CHANGE_ME"   # 마감
+
+    3_사업소득자:
+      tab_menu_path: "인사급여|사업소득관리"
+      register:
+        menu_path: "사업소득자등록"
+        field_control_ids:
+          이름: "CHANGE_ME"
+        save_button_control_id: "CHANGE_ME"
+      payroll:
+        menu_path: "사업소득자료입력"
+        field_control_ids:
+          이름: "CHANGE_ME"
+          금액: "CHANGE_ME"
+        save_button_control_id: "CHANGE_ME"
+        close_button_control_id: "CHANGE_ME"   # 마감
+
+    4_기타소득자:
+      tab_menu_path: "인사급여|기타소득관리"
+      register:
+        menu_path: "기타소득자(이자배당)등록"
+        field_control_ids:
+          이름: "CHANGE_ME"
+        save_button_control_id: "CHANGE_ME"
+      payroll:
+        menu_path: "기타소득자료입력"
+        field_control_ids:
+          이름: "CHANGE_ME"
+          금액: "CHANGE_ME"
+        save_button_control_id: "CHANGE_ME"
+        close_button_control_id: "CHANGE_ME"   # 마감
+
+  # 회사 하나의 급여구분별 처리가 모두 끝난 뒤 실행: 세무신고서류 작성 -> 마감
+  tax_filing:
+    tab_menu_path: "세무신고서류"
+    withholding_report:
+      menu_path: "원천징수이행상황신고서"
+      create_button_control_id: "CHANGE_ME"
+    local_income_tax:
+      menu_path: "지방소득세납부서(명세서)"
+      current_company_filter_control_id: "CHANGE_ME"  # "현재회사" 필터/탭 (없으면 빈 문자열로 두면 건너뜀)
+      calculation_button_control_id: "CHANGE_ME"       # 지방소득세 계산서
+      payment_button_control_id: "CHANGE_ME"           # 납부서
+    close_button_control_id: "CHANGE_ME"  # 마감
