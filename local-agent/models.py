@@ -57,8 +57,8 @@ class PayrollRecord:
         """등록/자료입력 화면에 채울 값을 컬럼명으로 조회한다.
 
         필수 컬럼(회사명/사업자등록번호/이름/급여구분/금액)뿐 아니라, 시트에 추가로
-        넣어둔 임의 컬럼(예: 주민등록번호, 입사일 등)도 config.yaml의
-        field_control_ids에 컬럼명만 추가하면 그대로 조회된다.
+        넣어둔 임의 컬럼(예: 주민등록번호, 입사일 등)도 config.yaml에서 컬럼명만
+        참조하면 그대로 조회된다.
         """
         return str(self.raw.get(column, "")).strip()
 
@@ -86,4 +86,16 @@ def group_by_company(records: list) -> list:
             groups[key] = CompanyGroup(record.company_name, record.biz_reg_no, [])
             order.append(key)
         groups[key].records.append(record)
-    return [groups[key] for key in order]
+    result = [groups[key] for key in order]
+    for company in result:
+        assign_auto_employee_numbers(company.records)
+    return result
+
+
+def assign_auto_employee_numbers(records: list) -> None:
+    """"RPA_원천세" 시트에 사번 컬럼이 없거나 비어 있는 행에 회사 내 순번(1,2,3...)을 채운다."""
+    next_number = 1
+    for record in records:
+        if not record.field("사번"):
+            record.raw["사번"] = str(next_number)
+        next_number += 1

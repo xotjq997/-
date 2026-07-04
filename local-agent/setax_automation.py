@@ -5,11 +5,16 @@
 스펙이 없다. 아래 코드가 사용하는 메뉴 경로/컨트롤 식별자는 전부 config.yaml의 placeholder이며,
 실제 값은 inspect_controls.py로 프로그램을 직접 열어 확인한 뒤 채워야 동작한다.
 
+사원등록/급여자료입력 등 자료입력 화면은 개별 입력창이 아니라 fpUSpread80이라는 스프레드시트형
+그리드 컨트롤 하나로 되어 있어(컨트롤 트리에 셀 단위 자동화ID가 없음), 필드마다 컨트롤ID를 지정하는
+방식이 통하지 않는다. 대신 사람이 입력하듯 "값 타이핑 -> 확정키(Enter/Tab) -> 다음 칸" 방식의
+키보드 기반 입력(그리드 입력, grid_entry)으로 처리한다.
+
 회사 1곳을 처리하는 순서:
     회사 변경
     -> 그 회사에 존재하는 급여구분(정규직/일용직/사업소득자/기타소득자)마다
-       해당 탭으로 이동 -> 등록 화면에 사원(소득자) 정보 입력 -> 급여자료 입력 화면에
-       금액 등을 입력 -> 마감
+       해당 탭으로 이동 -> 등록 화면에 사원(소득자) 정보 입력(그리드) -> 급여자료 입력 화면에
+       금액 등을 입력(그리드) -> 마감
     -> 세무신고서류 탭 -> 원천징수이행상황신고서 작성 -> 지방소득세납부서(명세서) 중
        현재회사 지방소득세 계산서/납부서 작성 -> 마감
 """
@@ -25,6 +30,8 @@ from pywinauto import Application
 from models import PayrollRecord
 
 logger = logging.getLogger(__name__)
+
+_COMMIT_KEYS = {"enter": "{ENTER}", "tab": "{TAB}"}
 
 
 @dataclass
@@ -93,14 +100,14 @@ class SetaxProAutomation:
 
         register_cfg = cfg["register"]
         self._navigate(register_cfg["menu_path"])
-        for record in records:
-            self._fill_record(register_cfg["field_control_ids"], record)
+        self._enter_grid_rows(register_cfg["grid_entry"], records)
+        if register_cfg.get("save_button_control_id"):
             self._click(register_cfg["save_button_control_id"])
 
         payroll_cfg = cfg["payroll"]
         self._navigate(payroll_cfg["menu_path"])
-        for record in records:
-            self._fill_record(payroll_cfg["field_control_ids"], record)
+        self._enter_grid_rows(payroll_cfg["grid_entry"], records)
+        if payroll_cfg.get("save_button_control_id"):
             self._click(payroll_cfg["save_button_control_id"])
 
         self._click(payroll_cfg["close_button_control_id"])  # 마감
@@ -131,17 +138,58 @@ class SetaxProAutomation:
         )
 
     # ------------------------------------------------------------------
-    # 내부 헬퍼
+    # 그리드(fpUSpread80) 입력: 등록/급여자료입력 화면 공용
+    # ------------------------------------------------------------------
+    def _enter_grid_rows(self, grid_cfg: dict, records: list[PayrollRecord]) -> None:
+        """화면당 한 번만 그리드에 포커스를 준 뒤, 행마다 필드를 타이핑 -> 확정키로 커밋한다.
+
+        마지막 필드의 확정키(보통 tab)를 누르면 그리드가 자동으로 다음 빈 행의 첫 칸으로
+        이동하는 것이 확인됐으므로(사원등록 기준), 새 행마다 다시 클릭할 필요는 없다.
+        단, 화면을 처음 열었을 때 첫 빈 행에 포커스를 주려면 마우스 클릭이 필요하다는 것도
+        확인됐다 - 그 클릭 위치가 화면/회사마다 달라질 수 있어 config의
+        grid_control_class_name + initial_focus_keys로 조정 가능하게 열어둔다.
+        """
+        self._focus_grid_first_row(grid_cfg)
+        for record in records:
+            for field_cfg in grid_cfg["fields"]:
+                value = record.field(field_cfg["column"]) or field_cfg.get("default", "")
+                commit_key = field_cfg["commit_key"]
+                self._type_and_commit(value, commit_key)
+
+    def _focus_grid_first_row(self, grid_cfg: dict) -> None:
+        class_name = grid_cfg.get("grid_control_class_name", "fpUSpread80")
+        initial_focus_keys = grid_cfg.get("initial_focus_keys", "")
+        if self._app_cfg.dry_run:
+            logger.info(
+                "[dry-run] 그리드(%s) 클릭 후 첫 빈 행으로 이동: 키입력 %r",
+                class_name,
+                initial_focus_keys,
+            )
+            return
+        window = self._app.top_window()
+        grid = window.child_window(class_name=class_name)
+        grid.click_input()
+        if initial_focus_keys:
+            grid.type_keys(initial_focus_keys)
+
+    def _type_and_commit(self, value: str, commit_key: str) -> None:
+        if commit_key not in _COMMIT_KEYS:
+            raise SetaxAutomationError(f"알 수 없는 commit_key입니다: {commit_key!r} (enter/tab만 지원)")
+        if self._app_cfg.dry_run:
+            logger.info("[dry-run] 입력: %r -> %s", value, commit_key)
+            return
+        window = self._app.top_window()
+        window.type_keys(value, with_spaces=True)
+        window.type_keys(_COMMIT_KEYS[commit_key])
+
+    # ------------------------------------------------------------------
+    # 내부 헬퍼 (일반 컨트롤: 회사변경 검색창, 세무신고서류 버튼 등)
     # ------------------------------------------------------------------
     def _require_section(self, key: str) -> dict:
         cfg = self._cfg.get(key)
         if cfg is None:
             raise SetaxAutomationError(f"config.yaml의 setax_pro.{key} 설정이 없습니다.")
         return cfg
-
-    def _fill_record(self, field_control_ids: dict, record: PayrollRecord) -> None:
-        for column, control_id in field_control_ids.items():
-            self._set_text(control_id, record.field(column))
 
     def _navigate(self, menu_path: str) -> None:
         if self._app_cfg.dry_run:
