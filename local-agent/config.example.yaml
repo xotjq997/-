@@ -1,0 +1,39 @@
+# local-agent 설정 예시. 복사해서 config.yaml로 저장한 뒤 실제 환경값으로 채우세요.
+# config.yaml은 .gitignore에 등록해 실제 경로/자격증명이 저장소에 올라가지 않게 하세요.
+
+# Google Drive for Desktop으로 동기화된, GAS의 EXPORT_FOLDER_ID와 동일한 폴더의 "로컬 경로".
+# 예: C:\Users\<user>\Google Drive\세무사랑_연동
+watch_folder: "C:/Users/CHANGE_ME/Google Drive/세무사랑_연동"
+
+# 처리 완료 후 파일을 옮겨둘 로컬 폴더 (감사/재처리 대비)
+processed_folder: "C:/Users/CHANGE_ME/Google Drive/세무사랑_연동/processed"
+failed_folder: "C:/Users/CHANGE_ME/Google Drive/세무사랑_연동/failed"
+
+# 새 파일이 Drive 동기화로 완전히 다 내려올 때까지 대기하는 시간(초)
+settle_seconds: 5
+
+google_sheets:
+  # Google Cloud 서비스 계정 키 파일 경로. 이 서비스 계정 이메일을
+  # 급여 스프레드시트에 "편집자"로 공유해야 함.
+  service_account_json: "C:/secure/service-account.json"
+  spreadsheet_id: "CHANGE_ME"
+  sync_log_sheet_name: "연동로그"
+
+setax_pro:
+  # 세무사랑 Pro 실행 파일 경로 (프로그램이 이미 켜져 있으면 attach만 시도)
+  exe_path: "C:/Program Files (x86)/한국세무사회/세무사랑Pro/SetaxPro.exe"
+  # pywinauto가 창을 찾을 때 쓰는 제목 정규식.
+  # 정확한 값은 inspect_controls.py로 실제 창을 열어 확인해서 채워야 한다.
+  window_title_regex: ".*세무사랑.*"
+  backend: "uia"  # 대부분의 최신 Windows 프로그램은 uia, 구형 win32 프로그램이면 "win32"로 변경
+
+  # 아래 control 식별자들은 전부 placeholder다.
+  # inspect_controls.py 실행 결과를 보고 실제 자동화ID/이름으로 바꿔야 동작한다.
+  menu_path: "원천징수|원천세 신고서 작성"
+  import_button_control_id: "CHANGE_ME_IMPORT_BUTTON"
+  file_path_input_control_id: "CHANGE_ME_FILE_PATH_INPUT"
+  confirm_button_control_id: "CHANGE_ME_CONFIRM_BUTTON"
+
+# 안전장치: true면 실제 화면 입력 없이 어떤 동작을 할지 로그만 남긴다.
+# 처음 세팅할 때는 반드시 true로 먼저 검증할 것.
+dry_run: true
