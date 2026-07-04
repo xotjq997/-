@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-REQUIRED_COLUMNS = ["회사명", "사업자등록번호", "이름", "급여구분", "금액"]
+REQUIRED_COLUMNS = ["회사명", "사업자등록번호", "이름", "급여구분"]
 
 INCOME_TYPE_ORDER = [
     "1_정규직근로자",
@@ -12,6 +12,9 @@ INCOME_TYPE_ORDER = [
     "3_사업소득자",
     "4_기타소득자",
 ]
+
+# 1_정규직근로자는 급여자료입력 화면에 이 네 항목을 구분해서 입력한다(단일 "금액" 대신).
+REGULAR_EMPLOYEE_AMOUNT_COLUMNS = ["기본급", "식대", "자가운전보조금", "상여금"]
 
 
 class PayrollDataError(ValueError):
@@ -32,6 +35,14 @@ class PayrollRecord:
                 f"{self.row_number}행: 급여구분 '{self.income_type}'은(는) 알 수 없는 값입니다. "
                 f"허용값: {', '.join(INCOME_TYPE_ORDER)}"
             )
+        if self.income_type == "1_정규직근로자":
+            if not any(self.field(c) for c in REGULAR_EMPLOYEE_AMOUNT_COLUMNS):
+                raise PayrollDataError(
+                    f"{self.row_number}행: 1_정규직근로자는 {'/'.join(REGULAR_EMPLOYEE_AMOUNT_COLUMNS)} "
+                    "중 최소 하나는 입력해야 합니다."
+                )
+        elif not self.field("금액"):
+            raise PayrollDataError(f"{self.row_number}행: 급여구분 '{self.income_type}'은 금액 컬럼이 필요합니다.")
 
     @property
     def company_name(self) -> str:
@@ -51,7 +62,9 @@ class PayrollRecord:
 
     @property
     def amount(self) -> str:
-        return str(self.raw["금액"]).strip()
+        """1_정규직근로자 외 급여구분에서 쓰는 단일 지급액. 정규직근로자는 대신
+        REGULAR_EMPLOYEE_AMOUNT_COLUMNS(기본급/식대/자가운전보조금/상여금)를 쓴다."""
+        return self.field("금액")
 
     def field(self, column: str) -> str:
         """등록/자료입력 화면에 채울 값을 컬럼명으로 조회한다.

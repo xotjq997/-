@@ -33,6 +33,12 @@ setax_pro:
     search_input_control_id: "CHANGE_ME"   # 사업자등록번호 검색창
     confirm_button_control_id: "CHANGE_ME"
 
+  # 급여자료입력 화면에서 사원별 입력 전에 화면당 한 번만 입력하는 공통 헤더값.
+  # 매월 처리 전에 이 값을 그 달에 맞게 갱신할 것 (귀속월/지급월일은 실행 시점마다 다름).
+  pay_period:
+    year_month: "CHANGE_ME"     # 귀속월 (예: "2026-07", 실제 화면 입력 형식에 맞게 조정)
+    payment_date: "CHANGE_ME"   # 지급월일 (예: "2026-07-10")
+
   # 급여구분(구글시트 "급여구분" 컬럼 값)별 화면 설정.
   #
   # 등록/급여자료입력 화면은 개별 입력창이 아니라 fpUSpread80이라는 스프레드시트형
@@ -61,17 +67,31 @@ setax_pro:
             - {column: "내외국인구분", commit_key: "enter", default: "1"}   # 1=내국인, 2=외국인
             - {column: "주민등록번호", commit_key: "tab"}   # tab -> 다음 사람 사번 칸으로 자동 이동
       payroll:
-        # 급여자료입력도 같은 종류의 그리드 화면일 가능성이 높지만 아직 실제 화면에서
-        # 필드 순서/확정키를 확인하지 못했다. inspect_controls.py + 직접 입력 테스트로
-        # 사원등록과 같은 방식으로 확인한 뒤 아래 fields를 채울 것.
+        # 실측 확인된 흐름: 귀속월/지급월일(화면당 한 번) -> 사번 입력+엔터(사원정보 자동
+        # 로드, F2로 목록에서 골라도 되지만 사번+엔터가 더 간단해서 이 방식을 씀) -> 기본급/
+        # 식대/자가운전보조금/상여금 순서로 입력 -> F8 마감. 단, 기본급 등 각 항목 입력 후
+        # 다음 항목으로 넘어가는 확정키(enter/tab)는 아직 실제 화면에서 확인 전이라
+        # CHANGE_ME로 남겨둠 - 사원등록과 같은 방식으로 테스트해 채울 것.
         menu_path: "급여자료입력"
+        pay_period_fields:
+          - {value_key: "year_month", commit_key: "CHANGE_ME"}
+          - {value_key: "payment_date", commit_key: "CHANGE_ME"}
         grid_entry:
           grid_control_class_name: "fpUSpread80"
           initial_focus_keys: ""
           fields:
-            - {column: "사번", commit_key: "CHANGE_ME"}
-            - {column: "금액", commit_key: "CHANGE_ME"}
-        close_button_control_id: "CHANGE_ME"   # 마감
+            - {column: "사번", commit_key: "enter"}   # 엔터 -> 사원정보 자동 로드 (F2 목록 대신 사용)
+            - {column: "기본급", commit_key: "CHANGE_ME"}
+            - {column: "식대", commit_key: "CHANGE_ME"}
+            - {column: "자가운전보조금", commit_key: "CHANGE_ME"}
+            - {column: "상여금", commit_key: "CHANGE_ME"}   # 마지막 항목 확정키 -> 다음 사원 사번 칸으로 이동
+        # F9 인쇄 -> "급여상여명세서(구)" 서식 선택 -> PDF 저장. RPA가 제대로 입력됐는지
+        # 검토하기 위한 보조 절차일 뿐 필수는 아니라서 기본은 꺼둠. 인쇄/저장 대화상자
+        # 자동화는 아직 미구현 (실행하면 경고 로그만 남기고 사람이 직접 확인하도록 안내).
+        verification_pdf:
+          enabled: false
+          format_name: "급여상여명세서(구)"
+        close_keys: "{F8}"   # 마감 (실측 확인됨)
 
     2_일용직근로자:
       tab_menu_path: "인사급여|일용직근로소득관리"

@@ -106,11 +106,15 @@ class SetaxProAutomation:
 
         payroll_cfg = cfg["payroll"]
         self._navigate(payroll_cfg["menu_path"])
+        if payroll_cfg.get("pay_period_fields"):
+            self._enter_pay_period(payroll_cfg["pay_period_fields"])
         self._enter_grid_rows(payroll_cfg["grid_entry"], records)
         if payroll_cfg.get("save_button_control_id"):
             self._click(payroll_cfg["save_button_control_id"])
+        if payroll_cfg.get("verification_pdf", {}).get("enabled"):
+            self._export_verification_pdf(payroll_cfg["verification_pdf"])
 
-        self._click(payroll_cfg["close_button_control_id"])  # 마감
+        self._close_screen(payroll_cfg)  # 마감
         logger.info("[%s] 마감 완료", income_type)
 
     # ------------------------------------------------------------------
@@ -131,7 +135,7 @@ class SetaxProAutomation:
         self._click(local_tax_cfg["calculation_button_control_id"])  # 지방소득세 계산서
         self._click(local_tax_cfg["payment_button_control_id"])  # 납부서
 
-        self._click(cfg["close_button_control_id"])  # 마감
+        self._close_screen(cfg)  # 마감
         logger.warning(
             "원천징수이행상황신고서/지방소득세납부서 작성 및 마감을 실행했습니다. "
             "실제 신고 접수 전에 반드시 세무사랑 Pro 화면에서 값을 직접 재확인하세요."
@@ -181,6 +185,40 @@ class SetaxProAutomation:
         window = self._app.top_window()
         window.type_keys(value, with_spaces=True)
         window.type_keys(_COMMIT_KEYS[commit_key])
+
+    # ------------------------------------------------------------------
+    # 급여자료입력 공통 헤더: 귀속월/지급월일 (사원별이 아니라 화면당 한 번만 입력)
+    # ------------------------------------------------------------------
+    def _enter_pay_period(self, pay_period_fields: list[dict]) -> None:
+        cfg = self._require_section("pay_period")
+        for field_cfg in pay_period_fields:
+            value = cfg[field_cfg["value_key"]]
+            self._type_and_commit(value, field_cfg["commit_key"])
+
+    # ------------------------------------------------------------------
+    # 검토용 PDF 저장 (F9 인쇄 -> 서식 선택 -> 다른이름으로 저장). 필수 단계는 아니고
+    # RPA가 제대로 입력했는지 사람이 검토하기 위한 보조 절차라, 기본값은 비활성화(enabled: false).
+    # 인쇄 대화상자/저장 대화상자의 실제 컨트롤 구조가 아직 확인되지 않아 실행부는 미구현이다.
+    # ------------------------------------------------------------------
+    def _export_verification_pdf(self, cfg: dict) -> None:
+        logger.warning(
+            "verification_pdf.enabled=true 이지만 인쇄/저장 대화상자 자동화는 아직 구현되지 않았습니다. "
+            "F9 인쇄 -> '%s' 서식 선택 -> PDF 저장을 사람이 직접 확인하세요.",
+            cfg.get("format_name", "급여상여명세서(구)"),
+        )
+
+    # ------------------------------------------------------------------
+    # 마감: F8 키 입력(권장, 확인됨)이 설정돼 있으면 그것을 쓰고, 없으면 버튼 클릭으로 대체
+    # ------------------------------------------------------------------
+    def _close_screen(self, cfg: dict) -> None:
+        close_keys = cfg.get("close_keys")
+        if close_keys:
+            if self._app_cfg.dry_run:
+                logger.info("[dry-run] 마감 키 입력: %s", close_keys)
+                return
+            self._app.top_window().type_keys(close_keys)
+            return
+        self._click(cfg["close_button_control_id"])
 
     # ------------------------------------------------------------------
     # 내부 헬퍼 (일반 컨트롤: 회사변경 검색창, 세무신고서류 버튼 등)
